@@ -27,7 +27,11 @@ docsRouter.post(
   async (req: AuthenticatedRequest, res, next) => {
     const parsed = generateSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json(errorResponse(parsed.error.flatten().formErrors.join(', ') || 'Invalid request body'));
+      const message =
+        parsed.error.flatten().formErrors.join(', ') ||
+        Object.values(parsed.error.flatten().fieldErrors).flat().join(', ') ||
+        'Invalid request body';
+      return res.status(400).json(errorResponse(message));
     }
 
     const { code, language, style } = parsed.data;

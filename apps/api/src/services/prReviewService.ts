@@ -34,7 +34,14 @@ export async function handlePullRequestEvent(event: GitHubPREvent): Promise<void
       return;
     }
 
-    const diffResponse = await axios.get(pr.diff_url, {
+    // Validate diff_url is a GitHub URL before fetching
+    const diffUrl = new URL(pr.diff_url);
+    if (diffUrl.hostname !== 'github.com' && diffUrl.hostname !== 'api.github.com') {
+      logger.error('Invalid diff_url hostname in PR event', { hostname: diffUrl.hostname });
+      return;
+    }
+
+    const diffResponse = await axios.get(diffUrl.toString(), {
       headers: getDiffHeaders(githubToken),
       responseType: 'text',
     });
@@ -65,6 +72,11 @@ export async function handlePullRequestEvent(event: GitHubPREvent): Promise<void
     logger.info('Review generated', { prNumber, score: review.score, approved: review.approved });
 
     // ── 3. Post review comment to GitHub ─────────────────────────────────
+    // Validate owner/repo contain only safe characters to prevent path injection
+    if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repo)) {
+      logger.error('Invalid owner or repo name in PR event', { owner, repo });
+      return;
+    }
     const commentBody = formatReviewAsMarkdown(review);
     await axios.post(
       `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,

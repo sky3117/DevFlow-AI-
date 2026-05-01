@@ -3,6 +3,7 @@ import axios from 'axios';
 import jwt from 'jsonwebtoken';
 import { prisma } from '@devflow/db';
 import { successResponse, errorResponse } from '@devflow/shared';
+import { apiRateLimiter } from '../middleware/rateLimiter.js';
 import { logger } from '../config/logger.js';
 
 export const authRouter = Router();
@@ -105,7 +106,7 @@ authRouter.post('/github/callback', async (req, res, next) => {
  * GET /api/v1/auth/me
  * Returns the authenticated user's profile (requires valid JWT)
  */
-authRouter.get('/me', async (req, res, next) => {
+authRouter.get('/me', apiRateLimiter, async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json(errorResponse('Unauthorized'));
