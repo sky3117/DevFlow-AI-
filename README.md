@@ -10,7 +10,7 @@ devflow-ai/
 │   ├── api/          # Node.js Express Backend (port 3001)
 │   └── web/          # React 18 + Vite Frontend (port 3000)
 ├── services/
-│   ├── ai/           # Python FastAPI AI Engine (port 8000)
+│   ├── ai-service/   # Python FastAPI AI Engine (port 8000)
 │   └── github-bot/   # GitHub Webhook Handler (port 3002)
 ├── packages/
 │   ├── db/           # Prisma ORM + Database Schema
