@@ -1,0 +1,114 @@
+import axios from 'axios';
+import { prisma } from '@devflow/db';
+import {
+  formatReviewAsMarkdown,
+  getDiffHeaders,
+  getGitHubHeaders,
+  estimateTokens,
+  truncate,
+  type GitHubPREvent,
+  type ClaudeReviewResponse,
+} from '@devflow/shared';
+import { logger } from '../config/logger.js';
+
+/**
+ * Handles a GitHub pull_request webhook event:
+ * 1. Fetches the PR diff from GitHub API
+ * 2. Sends it to the Claude AI service for review
+ * 3. Posts the review as a GitHub PR comment
+ * 4. Stores the review in the database
+ */
+export async function handlePullRequestEvent(event: GitHubPREvent): Promise<void> {
+  const { pull_request: pr, repository } = event;
+  const owner = repository.owner.login;
+  const repo = repository.name;
+  const prNumber = pr.number;
+
+  logger.info('Processing PR review', { owner, repo, prNumber });
+
+  try {
+    // ── 1. Fetch PR diff ──────────────────────────────────────────────────
+    const githubToken = process.env.GITHUB_TOKEN;
+    if (!githubToken) {
+      logger.warn('GITHUB_TOKEN not set; skipping PR diff fetch');
+      return;
+    }
+
+    const diffResponse = await axios.get(pr.diff_url, {
+      headers: getDiffHeaders(githubToken),
+      responseType: 'text',
+    });
+
+    const diff = diffResponse.data as string;
+
+    // Truncate very large diffs to avoid token limit issues
+    const maxDiffChars = 32000; // ~8000 tokens
+    const truncatedDiff =
+      diff.length > maxDiffChars
+        ? diff.slice(0, maxDiffChars) + '\n\n[... diff truncated for review ...]'
+        : diff;
+
+    const tokensEstimate = estimateTokens(truncatedDiff);
+    logger.info('Diff fetched', { prNumber, chars: diff.length, tokensEstimate });
+
+    // ── 2. Call AI service for review ─────────────────────────────────────
+    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+
+    const reviewResponse = await axios.post(`${aiServiceUrl}/review`, {
+      diff: truncatedDiff,
+      pr_title: pr.title,
+      pr_description: pr.body ?? '',
+      repo_name: repository.full_name,
+    });
+
+    const review = reviewResponse.data as ClaudeReviewResponse;
+    logger.info('Review generated', { prNumber, score: review.score, approved: review.approved });
+
+    // ── 3. Post review comment to GitHub ─────────────────────────────────
+    const commentBody = formatReviewAsMarkdown(review);
+    await axios.post(
+      `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+      { body: commentBody },
+      { headers: getGitHubHeaders(githubToken) }
+    );
+
+    logger.info('Review comment posted to GitHub', { prNumber });
+
+    // ── 4. Store review in database ──────────────────────────────────────
+    // Look up the organization by GitHub org name
+    const org = await prisma.organization.findUnique({
+      where: { githubOrg: owner },
+    });
+
+    if (org) {
+      await prisma.review.create({
+        data: {
+          orgId: org.id,
+          prUrl: pr.html_url,
+          prNumber,
+          repoName: repository.full_name,
+          score: review.score,
+          issuesJson: review.issues as any,
+          summary: truncate(review.summary, 1000),
+          approved: review.approved,
+        },
+      });
+
+      // Track API usage
+      await prisma.apiUsage.create({
+        data: { orgId: org.id, tokensUsed: tokensEstimate, feature: 'review' },
+      });
+    } else {
+      logger.warn('Organization not found in DB, review not persisted', { githubOrg: owner });
+    }
+  } catch (err) {
+    logger.error('Error processing PR review', {
+      owner,
+      repo,
+      prNumber,
+      error: (err as Error).message,
+      stack: (err as Error).stack,
+    });
+    throw err; // Re-throw so webhook handler can log to webhook_logs
+  }
+}
