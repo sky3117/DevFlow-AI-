@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import Stripe from 'stripe';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma } from '@devflow/db';
 import { PLAN_LIMITS, successResponse, errorResponse } from '@devflow/shared';
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
-import { apiRateLimiter } from '../middleware/rateLimiter.js';
 import { logger } from '../config/logger.js';
 
 export const billingRouter = Router();
@@ -20,10 +20,17 @@ const checkoutSchema = z.object({
     .default(1),
 });
 
+const billingRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 billingRouter.post(
   '/checkout',
   requireAuth as any,
-  apiRateLimiter,
+  billingRateLimiter,
   async (req: AuthenticatedRequest, res, next) => {
     const parsed = checkoutSchema.safeParse(req.body);
     if (!parsed.success) {

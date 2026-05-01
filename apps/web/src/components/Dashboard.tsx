@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { API_BASE, fetchReviewHistory } from '../lib/api';
 import { clearToken, getToken } from '../lib/auth';
 import { DocsGenerator } from './DocsGenerator';
@@ -16,13 +16,7 @@ export function Dashboard() {
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [reviewError, setReviewError] = useState<string | undefined>();
 
-  useEffect(() => {
-    if (token) {
-      void refreshReviews();
-    }
-  }, [token]);
-
-  async function refreshReviews() {
+  const refreshReviews = useCallback(async () => {
     if (!token) return;
     setLoadingReviews(true);
     setReviewError(undefined);
@@ -34,7 +28,13 @@ export function Dashboard() {
     } finally {
       setLoadingReviews(false);
     }
-  }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      void refreshReviews();
+    }
+  }, [token, refreshReviews]);
 
   function handleLogout() {
     clearToken();
