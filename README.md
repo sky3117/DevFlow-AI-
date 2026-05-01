@@ -11,20 +11,57 @@ and billing controls.
 - Stripe billing with seat-based limits
 
 ## Local Development
-1. Copy `.env.example` to `.env` and fill in required values.
-2. Copy `apps/web/.env.example` to `apps/web/.env` and set `VITE_API_URL` if needed.
-3. Install dependencies:
+### Prerequisites
+- Node.js 18+
+- Docker + Docker Compose (for Postgres/Redis, and optional AI service)
+- Python 3.12+ (only if running the AI service locally)
+
+### Setup
+1. Copy and fill env files:
+   - `.env.example` → `.env`
+   - `apps/web/.env.example` → `apps/web/.env`
+   - `services/ai/.env.example` → `services/ai/.env` (only if running AI locally)
+2. Install dependencies:
    ```bash
    npm install
    ```
-4. Start infra (Postgres + Redis):
+3. Start infra (Postgres + Redis):
    ```bash
    docker-compose up -d postgres redis
    ```
-5. Run the services:
+4. Run database migrations (optional seed):
+   ```bash
+   npm run db:migrate
+   npm run db:seed
+   ```
+
+### Start Services (Local Dev)
+1. Start the AI service (choose one):
+   - Docker:
+     ```bash
+     docker-compose up -d ai
+     ```
+   - Local Python:
+     ```bash
+     cd services/ai
+     pip install -r requirements.txt
+     uvicorn main:app --host 0.0.0.0 --port 8000
+     ```
+2. Start the Node services (API, Web, GitHub Bot):
    ```bash
    npm run dev
    ```
+
+### Start Everything with Docker (Optional)
+```bash
+docker-compose up --build
+```
+
+### URLs / Ports
+- Web: http://localhost:3000
+- API: http://localhost:3001
+- GitHub Bot: http://localhost:3002
+- AI Service: http://localhost:8000
 
 ## Services
 - `apps/api`: Express API (auth, reviews, docs, billing)
