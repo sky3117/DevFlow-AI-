@@ -29,8 +29,8 @@ const billingRateLimiter = rateLimit({
 
 billingRouter.post(
   '/checkout',
-  requireAuth as any,
   billingRateLimiter,
+  requireAuth as any,
   async (req: AuthenticatedRequest, res, next) => {
     const parsed = checkoutSchema.safeParse(req.body);
     if (!parsed.success) {
