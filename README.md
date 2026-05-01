@@ -1,17 +1,33 @@
-# DevFlow-AI
+# DevFlow AI
 
-This is the README file for the DevFlow-AI project. This project aims to...
+AI-powered developer productivity platform with automated code reviews, documentation generation,
+and billing controls.
 
-## Features
-- Feature 1
-- Feature 2
-- Feature 3
+## MVP Features
+- GitHub OAuth login
+- GitHub webhook → AI code review → PR comment
+- Review history dashboard
+- Auto documentation API + UI
+- Stripe billing with seat-based limits
 
-## Installation
-Instructions to install the project.
+## Local Development
+1. Copy `.env.example` to `.env` and fill in required values.
+2. Copy `apps/web/.env.example` to `apps/web/.env` and set `VITE_API_URL` if needed.
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+4. Start infra (Postgres + Redis):
+   ```bash
+   docker-compose up -d postgres redis
+   ```
+5. Run the services:
+   ```bash
+   npm run dev
+   ```
 
-## Usage
-Details on how to use the project.
-
-## License
-Information about the license.
+## Services
+- `apps/api`: Express API (auth, reviews, docs, billing)
+- `services/ai`: FastAPI Claude wrapper
+- `services/github-bot`: GitHub webhook handler
+- `apps/web`: React + Vite dashboard

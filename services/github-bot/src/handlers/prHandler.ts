@@ -10,6 +10,7 @@ import {
   type ClaudeReviewResponse,
 } from '@devflow/shared';
 import { logger } from '../config/logger.js';
+import { checkOrgReviewAccess } from '../services/planLimits.js';
 
 /**
  * Handles GitHub pull_request webhook events:
@@ -48,7 +49,23 @@ export async function handlePRWebhook(event: GitHubPREvent): Promise<void> {
 
     logger.info('Diff fetched', { chars: diff.length, tokens: estimateTokens(truncatedDiff) });
 
-    // Step 2: Call AI service
+    // Step 2: Enforce plan limits
+    const org = await prisma.organization.findUnique({ where: { githubOrg: owner } });
+    if (!org) {
+      logger.warn('Organization not found in DB, skipping AI review', { githubOrg: owner });
+      return;
+    }
+
+    const planStatus = await checkOrgReviewAccess(org.id);
+    if (!planStatus.allowed) {
+      logger.warn('Plan limits blocked AI review', {
+        orgId: org.id,
+        reason: planStatus.reason,
+      });
+      return;
+    }
+
+    // Step 3: Call AI service
     const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
     const reviewResponse = await axios.post(`${aiUrl}/review`, {
       diff: truncatedDiff,
@@ -60,7 +77,7 @@ export async function handlePRWebhook(event: GitHubPREvent): Promise<void> {
     const review = reviewResponse.data as ClaudeReviewResponse;
     logger.info('Review received', { score: review.score, issues: review.issues.length });
 
-    // Step 3: Post comment to GitHub
+    // Step 4: Post comment to GitHub
     const comment = formatReviewAsMarkdown(review);
     await axios.post(
       `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
@@ -69,25 +86,22 @@ export async function handlePRWebhook(event: GitHubPREvent): Promise<void> {
     );
     logger.info('Review comment posted', { prNumber });
 
-    // Step 4: Persist to database
-    const org = await prisma.organization.findUnique({ where: { githubOrg: owner } });
-    if (org) {
-      await prisma.review.create({
-        data: {
-          orgId: org.id,
-          prUrl: pr.html_url,
-          prNumber,
-          repoName: repository.full_name,
-          score: review.score,
-          issuesJson: review.issues as any,
-          summary: truncate(review.summary, 1000),
-          approved: review.approved,
-        },
-      });
-      await prisma.apiUsage.create({
-        data: { orgId: org.id, tokensUsed: estimateTokens(truncatedDiff), feature: 'review' },
-      });
-    }
+    // Step 5: Persist to database
+    await prisma.review.create({
+      data: {
+        orgId: org.id,
+        prUrl: pr.html_url,
+        prNumber,
+        repoName: repository.full_name,
+        score: review.score,
+        issuesJson: review.issues as any,
+        summary: truncate(review.summary, 1000),
+        approved: review.approved,
+      },
+    });
+    await prisma.apiUsage.create({
+      data: { orgId: org.id, tokensUsed: estimateTokens(truncatedDiff), feature: 'review' },
+    });
   } catch (err) {
     logger.error('PR handler failed', {
       owner,

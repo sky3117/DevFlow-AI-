@@ -14,7 +14,7 @@ export interface AuthenticatedRequest extends Request {
 
 /**
  * JWT auth middleware — verifies the Bearer token from the Authorization header.
- * The token is issued by NextAuth.js on the frontend and includes user info.
+ * The token is issued by the DevFlow API after GitHub OAuth and includes user info.
  */
 export function requireAuth(
   req: AuthenticatedRequest,

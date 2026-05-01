@@ -6,3 +6,4 @@ export * from './constants.js';
 export * from './utils/formatters.js';
 export * from './utils/token-counter.js';
 export * from './utils/github-helpers.js';
+export * from './utils/plan-limits.js';

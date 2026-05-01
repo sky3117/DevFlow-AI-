@@ -16,7 +16,7 @@ authRouter.get('/github', (_req, res) => {
   const params = new URLSearchParams({
     client_id: process.env.GITHUB_CLIENT_ID!,
     scope: 'read:user user:email',
-    redirect_uri: `${process.env.FRONTEND_URL}/api/auth/callback/github`,
+    redirect_uri: `${process.env.FRONTEND_URL}/auth/github/callback`,
   });
   res.redirect(`https://github.com/login/oauth/authorize?${params}`);
 });
