@@ -1,0 +1,152 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id         String   @id @default(cuid())
+  name       String
+  github_org String   @unique
+  plan       Plan     @default(starter)
+  seats      Int      @default(5)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  users        User[]
+  reviews      Review[]
+  bug_scans    BugScan[]
+  webhook_logs WebhookLog[]
+  api_usage    ApiUsage[]
+
+  @@map("organizations")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  org_id     String
+  github_id  String   @unique
+  email      String   @unique
+  name       String?
+  avatar_url String?
+  role       Role     @default(member)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  organization   Organization    @relation(fields: [org_id], references: [id], onDelete: Cascade)
+  docs_generated DocsGenerated[]
+
+  @@index([org_id])
+  @@map("users")
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  org_id      String
+  pr_url      String
+  pr_number   Int
+  score       Int      @default(0)
+  issues_json Json     @default("[]")
+  summary     String   @db.Text
+  approved    Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  // Relations
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+
+  @@index([org_id])
+  @@index([created_at])
+  @@map("reviews")
+}
+
+model DocsGenerated {
+  id          String   @id @default(cuid())
+  user_id     String
+  language    String
+  style       DocStyle @default(jsdoc)
+  tokens_used Int      @default(0)
+  created_at  DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("docs_generated")
+}
+
+model BugScan {
+  id            String   @id @default(cuid())
+  org_id        String
+  files_scanned Int      @default(0)
+  bugs_found    Int      @default(0)
+  risk_score    Float    @default(0)
+  created_at    DateTime @default(now())
+
+  // Relations
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+
+  @@index([org_id])
+  @@map("bug_scans")
+}
+
+model WebhookLog {
+  id            String        @id @default(cuid())
+  org_id        String
+  event_type    String
+  payload_json  Json
+  status        WebhookStatus @default(success)
+  error_message String?
+  created_at    DateTime      @default(now())
+
+  // Relations
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+
+  @@index([org_id])
+  @@index([created_at])
+  @@map("webhook_logs")
+}
+
+model ApiUsage {
+  id          String   @id @default(cuid())
+  org_id      String
+  tokens_used Int      @default(0)
+  endpoint    String
+  created_at  DateTime @default(now())
+
+  // Relations
+  organization Organization @relation(fields: [org_id], references: [id], onDelete: Cascade)
+
+  @@index([org_id])
+  @@index([created_at])
+  @@map("api_usage")
+}
+
+enum Plan {
+  starter
+  pro
+  enterprise
+}
+
+enum Role {
+  admin
+  member
+}
+
+enum DocStyle {
+  jsdoc
+  docstring
+  markdown
+}
+
+enum WebhookStatus {
+  success
+  failed
+}
