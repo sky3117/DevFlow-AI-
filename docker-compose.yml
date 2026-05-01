@@ -72,7 +72,7 @@ services:
 
   ai-service:
     build:
-      context: services/ai
+      context: services/ai-service
       dockerfile: Dockerfile
     container_name: devflow_ai
     restart: unless-stopped

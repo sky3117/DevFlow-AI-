@@ -30,7 +30,8 @@ export function githubDiffHeaders(token: string): Record<string, string> {
  * Extracts owner and repo from a GitHub repository URL
  */
 export function parseRepoUrl(url: string): { owner: string; repo: string } | null {
-  const match = url.match(/github\.com[/:]([^/]+)\/([^/\s.]+)/);
+  // Uses bounded character classes to avoid ReDoS
+  const match = url.match(/github\.com[/:]([a-zA-Z0-9_.-]{1,100})\/([a-zA-Z0-9_.-]{1,100})/);
   if (!match) return null;
   return { owner: match[1], repo: match[2].replace('.git', '') };
 }

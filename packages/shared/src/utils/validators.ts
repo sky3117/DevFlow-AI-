@@ -1,8 +1,9 @@
 /**
- * Validates an email address
+ * Validates an email address (basic format check)
  */
 export function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // Uses bounded quantifiers to avoid ReDoS
+  const emailRegex = /^[a-zA-Z0-9._%+\-]{1,64}@[a-zA-Z0-9.\-]{1,253}\.[a-zA-Z]{2,}$/;
   return emailRegex.test(email);
 }
 
