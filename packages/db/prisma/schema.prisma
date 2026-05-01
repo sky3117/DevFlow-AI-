@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Organizations ─────────────────────────────────────────────────────────
+model Organization {
+  id         String   @id @default(cuid())
+  name       String
+  githubOrg  String   @unique @map("github_org")
+  plan       Plan     @default(STARTER)
+  seats      Int      @default(5)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  users        User[]
+  reviews      Review[]
+  bugScans     BugScan[]
+  webhookLogs  WebhookLog[]
+  apiUsage     ApiUsage[]
+
+  @@map("organizations")
+}
+
+// ─── Users ─────────────────────────────────────────────────────────────────
+model User {
+  id        String   @id @default(cuid())
+  orgId     String?  @map("org_id")
+  githubId  String   @unique @map("github_id")
+  email     String?
+  name      String?
+  avatarUrl String?  @map("avatar_url")
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  organization  Organization?  @relation(fields: [orgId], references: [id])
+  docsGenerated DocsGenerated[]
+
+  @@map("users")
+}
+
+// ─── Reviews ────────────────────────────────────────────────────────────────
+model Review {
+  id         String   @id @default(cuid())
+  orgId      String   @map("org_id")
+  prUrl      String   @map("pr_url")
+  prNumber   Int      @map("pr_number")
+  repoName   String   @map("repo_name")
+  score      Int
+  issuesJson Json     @map("issues_json")
+  summary    String
+  approved   Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@map("reviews")
+}
+
+// ─── Docs Generated ─────────────────────────────────────────────────────────
+model DocsGenerated {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  language   String
+  style      String   @default("jsdoc")
+  tokensUsed Int      @map("tokens_used")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("docs_generated")
+}
+
+// ─── Bug Scans ──────────────────────────────────────────────────────────────
+model BugScan {
+  id            String   @id @default(cuid())
+  orgId         String   @map("org_id")
+  filesScanned  Int      @map("files_scanned")
+  bugsFound     Int      @map("bugs_found")
+  riskScore     Float    @map("risk_score")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@map("bug_scans")
+}
+
+// ─── Webhook Logs ──────────────────────────────────────────────────────────
+model WebhookLog {
+  id        String        @id @default(cuid())
+  orgId     String?       @map("org_id")
+  eventType String        @map("event_type")
+  payload   Json
+  status    WebhookStatus @default(PENDING)
+  error     String?
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  organization Organization? @relation(fields: [orgId], references: [id])
+
+  @@map("webhook_logs")
+}
+
+// ─── API Usage ─────────────────────────────────────────────────────────────
+model ApiUsage {
+  id         String   @id @default(cuid())
+  orgId      String   @map("org_id")
+  tokensUsed Int      @map("tokens_used")
+  feature    String   @default("review")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@map("api_usage")
+}
+
+// ─── Enums ─────────────────────────────────────────────────────────────────
+enum Plan {
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum WebhookStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
