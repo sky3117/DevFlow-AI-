@@ -10,6 +10,7 @@ import {
   type ClaudeReviewResponse,
 } from '@devflow/shared';
 import { logger } from '../config/logger.js';
+import { assertAiUsageAllowed } from './planLimits.js';
 
 /**
  * Handles a GitHub pull_request webhook event:
@@ -58,7 +59,27 @@ export async function handlePullRequestEvent(event: GitHubPREvent): Promise<void
     const tokensEstimate = estimateTokens(truncatedDiff);
     logger.info('Diff fetched', { prNumber, chars: diff.length, tokensEstimate });
 
-    // ── 2. Call AI service for review ─────────────────────────────────────
+    // ── 2. Enforce plan limits before AI review ──────────────────────────
+    const org = await prisma.organization.findUnique({
+      where: { githubOrg: owner },
+    });
+
+    if (!org) {
+      logger.warn('Organization not found in DB, skipping AI review', { githubOrg: owner });
+      return;
+    }
+
+    try {
+      await assertAiUsageAllowed(org.id, 'code_review');
+    } catch (err) {
+      logger.warn('Plan limits blocked AI review', {
+        orgId: org.id,
+        reason: (err as Error).message,
+      });
+      return;
+    }
+
+    // ── 3. Call AI service for review ─────────────────────────────────────
     const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
     const reviewResponse = await axios.post(`${aiServiceUrl}/review`, {
@@ -71,7 +92,7 @@ export async function handlePullRequestEvent(event: GitHubPREvent): Promise<void
     const review = reviewResponse.data as ClaudeReviewResponse;
     logger.info('Review generated', { prNumber, score: review.score, approved: review.approved });
 
-    // ── 3. Post review comment to GitHub ─────────────────────────────────
+    // ── 4. Post review comment to GitHub ─────────────────────────────────
     // Validate owner/repo contain only safe characters to prevent path injection
     if (!/^[\w.-]+$/.test(owner) || !/^[\w.-]+$/.test(repo)) {
       logger.error('Invalid owner or repo name in PR event', { owner, repo });
@@ -86,33 +107,24 @@ export async function handlePullRequestEvent(event: GitHubPREvent): Promise<void
 
     logger.info('Review comment posted to GitHub', { prNumber });
 
-    // ── 4. Store review in database ──────────────────────────────────────
-    // Look up the organization by GitHub org name
-    const org = await prisma.organization.findUnique({
-      where: { githubOrg: owner },
+    // ── 5. Store review in database ──────────────────────────────────────
+    await prisma.review.create({
+      data: {
+        orgId: org.id,
+        prUrl: pr.html_url,
+        prNumber,
+        repoName: repository.full_name,
+        score: review.score,
+        issuesJson: review.issues as any,
+        summary: truncate(review.summary, 1000),
+        approved: review.approved,
+      },
     });
 
-    if (org) {
-      await prisma.review.create({
-        data: {
-          orgId: org.id,
-          prUrl: pr.html_url,
-          prNumber,
-          repoName: repository.full_name,
-          score: review.score,
-          issuesJson: review.issues as any,
-          summary: truncate(review.summary, 1000),
-          approved: review.approved,
-        },
-      });
-
-      // Track API usage
-      await prisma.apiUsage.create({
-        data: { orgId: org.id, tokensUsed: tokensEstimate, feature: 'review' },
-      });
-    } else {
-      logger.warn('Organization not found in DB, review not persisted', { githubOrg: owner });
-    }
+    // Track API usage
+    await prisma.apiUsage.create({
+      data: { orgId: org.id, tokensUsed: tokensEstimate, feature: 'review' },
+    });
   } catch (err) {
     logger.error('Error processing PR review', {
       owner,

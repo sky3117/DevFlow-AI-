@@ -6,6 +6,7 @@ import { successResponse, errorResponse, estimateTokens } from '@devflow/shared'
 import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { aiRateLimiter } from '../middleware/rateLimiter.js';
 import { logger } from '../config/logger.js';
+import { assertAiUsageAllowed } from '../services/planLimits.js';
 
 export const docsRouter = Router();
 
@@ -38,6 +39,7 @@ docsRouter.post(
     const userId = req.user!.id;
 
     try {
+      await assertAiUsageAllowed(req.user?.orgId, 'docs');
       const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
       const response = await axios.post(`${aiServiceUrl}/docs`, {

@@ -8,6 +8,7 @@ import { authRouter } from './routes/auth.js';
 import { reviewsRouter } from './routes/reviews.js';
 import { docsRouter } from './routes/docs.js';
 import { webhooksRouter } from './routes/webhooks.js';
+import { billingRouter } from './routes/billing.js';
 import { logger } from './config/logger.js';
 
 const app = express();
@@ -28,6 +29,7 @@ app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) }
 // ─── Body parsing (raw for webhook signature verification) ─────────────────
 // Webhook route must get raw body for HMAC signature verification
 app.use('/api/v1/webhooks/github', express.raw({ type: 'application/json' }));
+app.use('/api/v1/billing/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -41,6 +43,7 @@ app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/reviews', reviewsRouter);
 app.use('/api/v1/docs', docsRouter);
 app.use('/api/v1/webhooks', webhooksRouter);
+app.use('/api/v1/billing', billingRouter);
 
 // ─── Error handler (must be last) ─────────────────────────────────────────
 app.use(errorHandler);
