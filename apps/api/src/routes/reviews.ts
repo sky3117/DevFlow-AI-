@@ -7,15 +7,14 @@ import { logger } from '../config/logger.js';
 
 export const reviewsRouter = Router();
 
-// Apply auth and rate limiting to all review routes
+// Apply auth to all review routes
 reviewsRouter.use(requireAuth as any);
-reviewsRouter.use(apiRateLimiter);
 
 /**
  * GET /api/v1/reviews
  * Returns review history for the authenticated user's organization
  */
-reviewsRouter.get('/', async (req: AuthenticatedRequest, res, next) => {
+reviewsRouter.get('/', apiRateLimiter, async (req: AuthenticatedRequest, res, next) => {
   try {
     const { orgId } = req.user!;
     if (!orgId) {
@@ -59,7 +58,7 @@ reviewsRouter.get('/', async (req: AuthenticatedRequest, res, next) => {
  * GET /api/v1/reviews/:id
  * Returns a single review by ID
  */
-reviewsRouter.get('/:id', async (req: AuthenticatedRequest, res, next) => {
+reviewsRouter.get('/:id', apiRateLimiter, async (req: AuthenticatedRequest, res, next) => {
   try {
     const { orgId } = req.user!;
     const review = await prisma.review.findFirst({
